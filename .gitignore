@@ -1,3 +1,11 @@
+.viminfo
+.bash_history
+.bash_logout
+.bashrc
+.gitignore
+.profile
+.viminfo
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -136,6 +144,7 @@ celerybeat.pid
 
 # Environments
 .env
+.bash
 .envrc
 .venv
 env/
