@@ -1,0 +1,6 @@
+fastapi
+asyncio
+uvicorn
+python-multipart
+websockets
+matplotlib

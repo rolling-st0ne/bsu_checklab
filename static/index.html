@@ -1,0 +1,254 @@
+  <!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Чеклаб</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+  <h2>Чеклаб by ИИ-шки</h2>
+  <table style="border: 1px solid">
+    <tr><td>
+      <p><b>Repack byXatab:</b></p>
+      <ul>
+        <li>Программы сдаются в виде ZIP архива с названием {номер лабы}_{фамилия латиницей}.zip, например, 1_atrokhau.zip</li>
+        <li>Внутри папка с тем же названием</li>
+        <li>В папке должны быть только .py файлы из лабораторной, не должно быть подпапок или скрытых элементов</li>
+        <li>Размер архива не должен превышать 32 КБ</li>
+        <li>Программы должны использовать только разрешенные модули</li>
+        <li>Использование input() под запретом – все параметры в программах должны передаваться в командной строке (и считываться из массива sys.argv)</li>
+        <li>Формат входных и выходных параметров также должен совпадать с указанным в задании</li>
+      </ul>
+    </td></tr>
+  </table>
+  <br>
+  <label for="labSelect">Выберите лабораторную работу:</label>
+  <select id="labSelect" onchange="showTasks()">
+    <option value="lab1">1. Создание простейших программ</option>
+    <option value="lab2">2. Списки и функции</option>
+    <option value="lab3" selected>3. Файлы, сортировка и визуализация</option>
+    <option value="lab4">4. Сложность алгоритмов, рекурсия, “разделяй и властвуй”, методы сортировки</option>
+    <option value="lab5">5. Стек, очередь, куча</option>
+    <option value="lab6">6. Словари, множества, графы</option>
+    <option value="lab7" selected>7. Жадные алгоритмы, перебор с возвратом, динамическое программирование</option></select>
+  <select id="taskSelect">
+  </select>
+  <br><br>
+
+  <table style="border: 1px solid">
+    <tr><td>
+        <p><b>Список файлов:</b> <span id="filenames"></p>    
+        <p><b>Разрешенные модули:</b> <spand id="modules"></p>
+    </td></tr>
+  </table>
+  <br>
+
+  <label for="zipInput">Загрузите ZIP архив:</label>
+  <input type="file" id="zipInput">
+  <button id="processButton" onclick="processZip()">Проверить</button>
+    
+  <p id="errors" style="color: red"></p>
+  <p id="check"></p>
+
+  <script>
+    let labs = {};
+
+    function formatSize(bytes) {
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let i = 0;
+      while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+      }
+      return `${bytes.toFixed(2)} ${units[i]}`;
+    }
+
+    async function showTasks() {
+      const response = await fetch('/get-labs');
+      labs = await response.json();
+
+      let selectedLab = document.getElementById("labSelect").value.replace("lab", "");
+      let tasks = "<option>Все</option>\n";
+      for (t of labs[selectedLab]["filenames"]) {
+        tasks += "<option>" + t + "</option>\n";
+      };
+      document.getElementById("taskSelect").innerHTML = tasks;
+      document.getElementById("filenames").innerHTML = labs[selectedLab]["filenames"].join(", ");
+      document.getElementById("modules").innerHTML = labs[selectedLab]["modules"].join(", ");
+    }
+
+    showTasks();
+
+    let ws = null;
+
+    async function processZip() {
+
+      if (ws) {
+          ws.close();
+          ws = null;
+      }
+
+      let selectedLab = document.getElementById("labSelect").value.replace("lab", "");
+      let labId = selectedLab;
+      let expectedTasks = labs[selectedLab]["filenames"];
+      let allowedModules = new Set(labs[selectedLab]["modules"]);
+      let allowedSysArgv = labs[selectedLab]["args"];
+      let task = document.getElementById("taskSelect").value;
+
+      let button = document.getElementById("processButton");
+      button.disabled = true;
+      document.getElementById("errors").innerHTML = "";
+      document.getElementById("check").innerHTML = "";
+
+      let input = document.getElementById("zipInput").files[0];
+      if (!input) {
+        document.getElementById("errors").innerHTML = "Загрузите ZIP-архив с программами";
+        button.disabled = false;
+        return;
+      }
+
+      if (!input.name.endsWith(".zip")) {
+        document.getElementById("errors").innerHTML = `Файл ${input.name} не является ZIP-архивом`;
+        button.disabled = false;
+        return;
+      }
+
+      const regex = new RegExp(`^${labId}_[a-zA-Z]+\\.zip$`);
+      if (!regex.test(input.name)) {
+        document.getElementById("errors").innerHTML = `Название файла ${input.name} не соответствует маске ${labId}_yourname.zip`;
+        button.disabled = false;
+        return;
+      }
+
+      if (input.size > 32768) {
+        document.getElementById("errors").innerHTML = `Размер архива ${formatSize(input.size)}, что больше допустимых 32 KB`;
+        button.disabled = false;
+        return;
+      }
+
+      if (Math.floor(Math.random() * 5) === 0) {
+        window.open('https://youtu.be/dQw4w9WgXcQ', '_blank');
+      }
+
+      let zip;
+      try {
+        zip = await JSZip.loadAsync(input);
+      } catch (e) {
+        document.getElementById("errors").innerHTML = `Ошибка при распаковке архива: ${e.message}`;
+        button.disabled = false;
+        return;                
+      }
+      let fileNames = Object.keys(zip.files);
+      let rootFolders = new Set(fileNames.map(name => name.split("/")[0]));
+      let labFolder = input.name.replace(".zip", "");
+
+      if (!rootFolders.has(labFolder)) {
+        document.getElementById("errors").innerHTML = `Архив не содержит папку с названием ${labFolder}`;
+        button.disabled = false;
+        return;
+      }
+
+      let labFolderFiles = fileNames
+        .filter(name => name.startsWith(labFolder + "/"))
+        .filter(name => !name.endsWith("/"))
+        .map(name => name.replace(labFolder + "/", ""));
+      let extraFiles = labFolderFiles.filter(file => !expectedTasks.includes(file));
+
+      if (extraFiles.length > 0) {
+        document.getElementById("errors").innerHTML = `Папка ${labFolder} содержит лишние файлы: ${extraFiles}`;
+        button.disabled = false;
+        return;
+      }
+
+      let errorLog = "";
+
+      for (let fileName of labFolderFiles) {
+
+        let fileContent = await zip.files[labFolder + "/" + fileName].async("text");
+        let lines = fileContent.split("\n");
+        let foundModules = new Set([])
+
+        for (let line of lines) {
+          line = line.trim().split("#")[0];
+          if (line.startsWith("from ")) {
+            foundModules.add(line.replace("from ", "").trim().split(" ")[0]);
+          }
+          if (line.startsWith("import ")) {
+            let importModules = new Set(line.replace("import ", "").split(",").map(part => part.trim().split(" as ")[0]));
+            importModules.forEach(module => foundModules.add(module))
+          }
+        }
+
+        if (![...foundModules].every(element => allowedModules.has(element))) {
+          errorLog += `<p>Файл ${fileName} содержит другие модули помимо ${[...allowedModules].join(", ")}</p>`;
+        }
+
+        // if (fileContent.includes("input(")) {
+        //     errorLog += `<p>Файл ${fileName} содержит input()</p>`;
+        // }                
+
+        if (fileContent.trim().length === 0) {
+          errorLog += `<p>Файл ${fileName} пуст</p>`;
+        }
+
+        if (fileName in allowedSysArgv) {
+          if (fileContent.includes("plt.savefig(") && !fileContent.includes("plt.savefig(" + allowedSysArgv[fileName])) {
+            errorLog += `<p>Файл ${fileName} должен использовать plt.savefig(${allowedSysArgv[fileName]}, ...), но найдено другое значение</p>`;
+          }
+        }
+      }
+
+      document.getElementById("errors").innerHTML = errorLog;
+
+      if (errorLog) {
+        button.disabled = false;
+        return;
+      }
+
+      const sessionId = Math.random().toString(36).substr(2, 9);
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}/ws/${sessionId}`);
+      let testsCompleted = false;
+
+      ws.onopen = () => {
+        let formData = new FormData();
+        formData.append("file", input);
+
+        fetch(`/upload-zip?session_id=${sessionId}&lab_id=${labId}&task=${task}`, { method: "POST", body: formData })
+          .then(response => response.json())
+          .catch(error => {
+            document.getElementById("errors").innerHTML = `Ошибка при отправке: ${error}`;
+            button.disabled = false;
+          })
+      }
+
+      ws.onmessage = (event) => {
+        if (event.data === "<br>Проверка завершена") {
+          testsCompleted = true;
+          ws.close();
+          ws = null;
+          button.disabled = false;
+        } else {
+          document.getElementById("check").innerHTML += `${event.data}<br>`;
+        }
+      };
+
+      ws.onerror = (error) => {
+        document.getElementById("errors").innerHTML = `Ошибка ${error}`;
+        button.disabled = false;
+      };
+
+      ws.onclose = (event) => {
+        if (!event.wasClean) {
+          document.getElementById("errors").innerHTML = `WebSocket закрыт с ошибкой: ${event.code}`;
+        }
+        ws = null;
+        if (testsCompleted) {
+          button.disabled = false;
+        }
+      }
+    }
+  </script>
+</body>
+</html>
