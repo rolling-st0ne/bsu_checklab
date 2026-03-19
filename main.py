@@ -35,6 +35,8 @@ clients = {}
 
 check_semaphore = asyncio.Semaphore(1)
 waiting_tasks = 0
+TMP_ROOT = os.path.abspath("tmp")
+os.makedirs(TMP_ROOT, exist_ok=True)
 
 def replace(data, replacements):
     if isinstance(data, list):
@@ -100,10 +102,7 @@ async def upload_zip(file: UploadFile, request: Request, session_id: str, lab_id
 
     # Создаем уникальную папку для этой проверки
     unique_id = str(uuid.uuid4())
- #   temp_dir = os.path.join("tmp", unique_id)
- #   os.makedirs(temp_dir, exist_ok=True)
-    import tempfile
-    temp_dir = os.path.join("/home/apprunner", "tmp", unique_id)
+    temp_dir = os.path.join(TMP_ROOT, unique_id)
     os.makedirs(temp_dir, exist_ok=True)
     
     zip_path = os.path.join(temp_dir, "upload.zip")
@@ -143,6 +142,10 @@ async def websocket_endpoint(ws: WebSocket, session_id: str):
     except:
         del clients[session_id]
         print(f"Удален session_id: {session_id}")
+
+async def cleanup_folder_later(folder_path: str, delay_seconds: int = 120):
+    await asyncio.sleep(delay_seconds)
+    shutil.rmtree(folder_path, ignore_errors=True)
 
 async def process_folder(session_id: str, folder_path: str, lab_id: str, task_filter: str):
     global waiting_tasks
@@ -220,7 +223,13 @@ async def process_folder(session_id: str, folder_path: str, lab_id: str, task_fi
                                         if args and "$USER$" in args[-1]:
                                             await safe_send(f"Результат ({elapsed}s): <span style='color: blue'>IMAGE</span>")
                                             if t_type == 'pub':
-                                                await safe_send(f"<img src=\"{args_fact[-1]}\" width=\"600\">")
+                                                img_path = os.path.abspath(args_fact[-1])
+                                                if img_path.startswith(TMP_ROOT + os.sep):
+                                                    rel_path = os.path.relpath(img_path, TMP_ROOT).replace(os.sep, "/")
+                                                    img_url = f"/tmp/{rel_path}"
+                                                else:
+                                                    img_url = args_fact[-1]
+                                                await safe_send(f"<img src=\"{img_url}\" width=\"600\">")
                                             else:
                                                 await safe_send(f"Вывод: ***")
                                         else:
@@ -240,10 +249,7 @@ async def process_folder(session_id: str, folder_path: str, lab_id: str, task_fi
             finally:
                 await safe_send("<br><b>Все тесты завершены.</b>")
                 await safe_send("<br>Проверка завершена")
-                # Удаляем временные файлы сразу
-                shutil.rmtree(folder_path, ignore_errors=True)
-                # await asyncio.sleep(60)
-                # shutil.rmtree(folder_path, ignore_errors=True)
+                asyncio.create_task(cleanup_folder_later(folder_path))
     finally:
         pass
 
@@ -254,7 +260,7 @@ async def serve_index():
 @app.get("/tmp/{file_path:path}")
 async def get_tmp_file(file_path: str):
 
-    base = os.path.abspath("tmp")
+    base = TMP_ROOT
     full_path = os.path.abspath(os.path.join(base, file_path))
 
     if not full_path.startswith(base):
